@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = 'rpillaiakshay/myapp'
-        GITHUB_REPO = 'https://github.com/rpillaiakshay/my-repo.git'
+        GITHUB_REPO = 'https://github.com/rpillaiakshay/microservices-project.git'
         AWS_REGION = 'ap-south-1'
     }
 
@@ -13,9 +13,10 @@ pipeline {
                 script {
                     checkout scmGit(
                         branches: [[name: '*/main']],
+                        extensions: [],
                         userRemoteConfigs: [[
-                            credentialsId: 'GitHub',
-                            url: GITHUB_REPO
+                            credentialsId: 'GitHub',  // GitHub token credential ID
+                            url: 'https://github.com/rpillaiakshay/microservices-project.git'
                         ]]
                     )
                 }
@@ -41,10 +42,19 @@ pipeline {
             }
         }
 
+        stage('Configure AWS CLI for EKS') {
+            steps {
+                script {
+                    withCredentials([aws(credentialsId: 'AWS_Credentials')]) {
+                        sh 'aws eks --region $AWS_REGION update-kubeconfig --name your-cluster-name'
+                    }
+                }
+            }
+        }
+
         stage('Deploy Backend to Kubernetes (Blue Environment)') {
             steps {
                 script {
-                    // Apply the Kubernetes configuration for the Blue environment
                     sh 'kubectl apply -f k8s/backend-deployment-blue.yaml'
                     sh 'kubectl apply -f k8s/backend-service.yaml'
                 }
@@ -54,7 +64,6 @@ pipeline {
         stage('Deploy Backend to Kubernetes (Green Environment)') {
             steps {
                 script {
-                    // Apply the Kubernetes configuration for the Green environment
                     sh 'kubectl apply -f k8s/backend-deployment-green.yaml'
                 }
             }
@@ -63,7 +72,6 @@ pipeline {
         stage('Switch Traffic to Green (Blue/Green Switch)') {
             steps {
                 script {
-                    // Update ingress to point to the green environment
                     sh 'kubectl apply -f k8s/ingress.yaml'
                 }
             }
@@ -72,7 +80,6 @@ pipeline {
         stage('Delete Blue Environment') {
             steps {
                 script {
-                    // Clean up the blue deployment after confirming traffic switch
                     sh 'kubectl delete -f k8s/backend-deployment-blue.yaml'
                 }
             }
@@ -90,7 +97,6 @@ pipeline {
         stage('Prometheus and Grafana Setup') {
             steps {
                 script {
-                    // Apply Prometheus and Grafana configuration
                     sh 'kubectl apply -f k8s/prometheus.yaml'
                     sh 'kubectl apply -f k8s/grafana.yaml'
                 }
