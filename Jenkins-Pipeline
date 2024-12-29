@@ -8,17 +8,22 @@ pipeline {
     }
 
     stages {
+        stage('Clean Workspace') {
+            steps {
+                script {
+                    // Remove any existing project directory to avoid conflicts
+                    sh 'rm -rf microservices-project'
+                }
+            }
+        }
+
         stage('Clone Code from GitHub') {
             steps {
                 script {
-                    checkout scmGit(
-                        branches: [[name: '*/main']],
-                        extensions: [],
-                        userRemoteConfigs: [[
-                            credentialsId: 'GitHub',  // GitHub token credential ID
-                            url: 'https://github.com/rpillaiakshay/microservices-project.git'
-                        ]]
-                    )
+                    withCredentials([string(credentialsId: 'GitHub', variable: 'GITHUB_TOKEN')]) {
+                        // Clone the repository with the provided GitHub token
+                        sh 'git clone https://$GITHUB_TOKEN@github.com/rpillaiakshay/microservices-project.git'
+                    }
                 }
             }
         }
@@ -26,7 +31,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'docker build -t $DOCKER_IMAGE .'
+                    // Build the Docker image from the 'app' directory
+                    sh 'docker build -t $DOCKER_IMAGE ./app'
                 }
             }
         }
@@ -34,10 +40,13 @@ pipeline {
         stage('Push Docker Image to Docker Hub') {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'DockerHub')]) {
-                        sh 'echo $DOCKERHUB_TOKEN | docker login -u rpillaiakshay --password-stdin'
+                    withCredentials([string(credentialsId: 'DockerHub', variable: 'DOCKERHUB_TOKEN')]) {
+                        // Login to Docker Hub and push the image
+                        sh '''
+                            echo $DOCKERHUB_TOKEN | docker login -u rpillaiakshay --password-stdin
+                            docker push $DOCKER_IMAGE
+                        '''
                     }
-                    sh 'docker push $DOCKER_IMAGE'
                 }
             }
         }
@@ -46,6 +55,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([aws(credentialsId: 'AWS_Credentials')]) {
+                        // Configure the AWS CLI to connect to the EKS cluster
                         sh 'aws eks --region $AWS_REGION update-kubeconfig --name micro-services'
                     }
                 }
@@ -55,6 +65,7 @@ pipeline {
         stage('Deploy Backend to Kubernetes (Blue Environment)') {
             steps {
                 script {
+                    // Deploy the backend to the blue environment
                     sh 'kubectl apply -f k8s/backend-deployment-blue.yaml'
                     sh 'kubectl apply -f k8s/backend-service.yaml'
                 }
@@ -64,6 +75,7 @@ pipeline {
         stage('Deploy Backend to Kubernetes (Green Environment)') {
             steps {
                 script {
+                    // Deploy the backend to the green environment
                     sh 'kubectl apply -f k8s/backend-deployment-green.yaml'
                 }
             }
@@ -72,6 +84,7 @@ pipeline {
         stage('Switch Traffic to Green (Blue/Green Switch)') {
             steps {
                 script {
+                    // Switch traffic to the green environment using Ingress
                     sh 'kubectl apply -f k8s/ingress.yaml'
                 }
             }
@@ -80,6 +93,7 @@ pipeline {
         stage('Delete Blue Environment') {
             steps {
                 script {
+                    // Clean up by deleting the blue environment
                     sh 'kubectl delete -f k8s/backend-deployment-blue.yaml'
                 }
             }
@@ -88,8 +102,11 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 script {
-                    sh 'terraform init'
-                    sh 'terraform apply -auto-approve'
+                    // Initialize and apply Terraform configuration
+                    sh '''
+                        terraform init
+                        terraform apply -auto-approve
+                    '''
                 }
             }
         }
@@ -97,8 +114,11 @@ pipeline {
         stage('Prometheus and Grafana Setup') {
             steps {
                 script {
-                    sh 'kubectl apply -f k8s/prometheus.yaml'
-                    sh 'kubectl apply -f k8s/grafana.yaml'
+                    // Set up Prometheus and Grafana for monitoring
+                    sh '''
+                        kubectl apply -f k8s/prometheus.yaml
+                        kubectl apply -f k8s/grafana.yaml
+                    '''
                 }
             }
         }
