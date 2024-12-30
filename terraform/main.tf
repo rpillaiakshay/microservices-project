@@ -1,12 +1,12 @@
 module "vpc" {
-  source = "github.com/rpillaiakshay/microservices-project//terraform/vpc"
+  source = "./terraform/vpc.tf"
 }
 
 module "eks" {
-  source = "github.com/rpillaiakshay/microservices-project//terraform/eks-cluster.tf"
+  source = "./terraform/eks-cluster.tf"
   vpc_id = module.vpc.vpc_id
 }
 
 module "iam_roles" {
-  source = "github.com/rpillaiakshay/microservices-project//terraform/iam_roles.tf"
+  source = "./terraform/iam_roles.tf"
 }
