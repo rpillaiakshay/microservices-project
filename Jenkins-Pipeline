@@ -5,13 +5,16 @@ pipeline {
         DOCKER_IMAGE = 'rpillaiakshay/myapp'
         GITHUB_REPO = 'https://github.com/rpillaiakshay/microservices-project.git'
         AWS_REGION = 'ap-south-1'
+        CLUSTER_NAME = 'micro-services'
+        AWS_ACCESS_KEY_ID = credentials('AwsKey')  // Ensuring AWS credentials are globally available
+        AWS_SECRET_ACCESS_KEY = credentials('AwsKey')
     }
 
     stages {
         stage('Clean Workspace') {
             steps {
                 script {
-                    // Remove any existing project directory to avoid conflicts
+                    // Clean up the workspace
                     sh 'rm -rf microservices-project'
                 }
             }
@@ -21,7 +24,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'GitHub', variable: 'GITHUB_TOKEN')]) {
-                        // Clone the repository with the provided GitHub token
+                        // Clone the repository using the GitHub token
                         sh 'git clone https://$GITHUB_TOKEN@github.com/rpillaiakshay/microservices-project.git'
                     }
                 }
@@ -31,8 +34,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Build the Docker image from the 'app' directory
-                    sh 'docker build -t $DOCKER_IMAGE ./app'
+                    // Build the Docker image
+                    sh 'docker build -t $DOCKER_IMAGE ./microservices-project/app'
                 }
             }
         }
@@ -41,7 +44,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'DockerHub', variable: 'DOCKERHUB_TOKEN')]) {
-                        // Login to Docker Hub and push the image
+                        // Login and push the Docker image to Docker Hub
                         sh '''
                             echo $DOCKERHUB_TOKEN | docker login -u rpillaiakshay --password-stdin
                             docker push $DOCKER_IMAGE
@@ -51,23 +54,17 @@ pipeline {
             }
         }
 
-        stage('Configure AWS CLI for EKS') {
-            steps {
-                script {
-                    withCredentials([aws(credentialsId: 'AWS_Credentials')]) {
-                        // Configure the AWS CLI to connect to the EKS cluster
-                        sh 'aws eks --region $AWS_REGION update-kubeconfig --name micro-services'
-                    }
-                }
-            }
-        }
-
         stage('Deploy Backend to Kubernetes (Blue Environment)') {
             steps {
                 script {
-                    // Deploy the backend to the blue environment
-                    sh 'kubectl apply -f k8s/backend-deployment-blue.yaml'
-                    sh 'kubectl apply -f k8s/backend-service.yaml'
+                    // Authenticate with AWS credentials and configure kubectl
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AwsKey']]) {
+                        sh '''
+                            aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
+                            kubectl apply -f microservices-project/k8s/backend-deployment-blue.yaml
+                            kubectl apply -f microservices-project/k8s/backend-service.yaml
+                        '''
+                    }
                 }
             }
         }
@@ -75,8 +72,14 @@ pipeline {
         stage('Deploy Backend to Kubernetes (Green Environment)') {
             steps {
                 script {
-                    // Deploy the backend to the green environment
-                    sh 'kubectl apply -f k8s/backend-deployment-green.yaml'
+                    // Deploy to the Green environment
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AwsKey']]) {
+                        sh '''
+                            aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
+                            kubectl apply -f microservices-project/k8s/backend-deployment-green.yaml
+                            kubectl apply -f microservices-project/k8s/backend-service.yaml
+                        '''
+                    }
                 }
             }
         }
@@ -84,8 +87,13 @@ pipeline {
         stage('Switch Traffic to Green (Blue/Green Switch)') {
             steps {
                 script {
-                    // Switch traffic to the green environment using Ingress
-                    sh 'kubectl apply -f k8s/ingress.yaml'
+                    // Ensure credentials are available for kubectl
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AwsKey']]) {
+                        sh '''
+                            aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
+                            kubectl apply -f microservices-project/k8s/ingress.yaml
+                        '''
+                    }
                 }
             }
         }
@@ -93,8 +101,13 @@ pipeline {
         stage('Delete Blue Environment') {
             steps {
                 script {
-                    // Clean up by deleting the blue environment
-                    sh 'kubectl delete -f k8s/backend-deployment-blue.yaml'
+                    // Delete the Blue environment if it exists
+                    def deploymentExists = sh(script: 'kubectl get deployments backend-deployment-blue -o name', returnStatus: true)
+                    if (deploymentExists == 0) {
+                        sh 'kubectl delete -f microservices-project/k8s/backend-deployment-blue.yaml'
+                    } else {
+                        echo 'Blue environment deployment does not exist. Skipping deletion.'
+                    }
                 }
             }
         }
@@ -102,22 +115,11 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 script {
-                    // Initialize and apply Terraform configuration
+                    // Initialize and apply Terraform configurations
                     sh '''
+                        cd microservices-project/terraform
                         terraform init
                         terraform apply -auto-approve
-                    '''
-                }
-            }
-        }
-
-        stage('Prometheus and Grafana Setup') {
-            steps {
-                script {
-                    // Set up Prometheus and Grafana for monitoring
-                    sh '''
-                        kubectl apply -f k8s/prometheus.yaml
-                        kubectl apply -f k8s/grafana.yaml
                     '''
                 }
             }
