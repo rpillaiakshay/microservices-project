@@ -1,5 +1,5 @@
 module "vpc" {
-  source = "./vpc"
+  source = "https://github.com/rpillaiakshay/microservices-project/blob/main/terraform/vpc.tf"
 }
 
 module "eks" {
