@@ -1,22 +1,16 @@
 {
-  "name": "microservice-app",
+  "name": "ecommerce-service",
   "version": "1.0.0",
-  "description": "A microservice application",
+  "description": "E-commerce microservice application",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "lint": "eslint .",
-    "test": "jest",
-    "build": "docker build -t rpillaiakshay/myapp ."
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "express": "^4.17.1"
   },
   "devDependencies": {
-    "nodemon": "^2.0.15",
-    "eslint": "^8.16.0",
-    "jest": "^27.4.5",
-    "dotenv": "^10.0.0"
+    "nodemon": "^2.0.15"
   }
 }
