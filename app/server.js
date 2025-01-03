@@ -1,31 +1,36 @@
-﻿const express = require('express');
+const express = require('express');
 const app = express();
-const port = 8080;
+const port = process.env.PORT || 8080;
 
-// Use middleware to parse JSON data
 app.use(express.json());
 
-// Simple Health Check route
+// In-memory product storage
+let products = [
+  { id: 1, name: 'Laptop', price: 1200 },
+  { id: 2, name: 'Smartphone', price: 800 },
+];
+
+// Health Check
 app.get('/health', (req, res) => {
   res.status(200).send({ message: 'API is running fine' });
 });
 
-// A simple dynamic API that could be expanded as a service
-app.post('/process', (req, res) => {
-  const { data } = req.body;
-  if (!data) {
-    return res.status(400).send({ error: 'Data is required' });
-  }
-  // Example: Process data and return some response
-  const processedData = data.toUpperCase(); // simple example of "processing"
-  res.status(200).send({ processedData });
+// Get all products
+app.get('/products', (req, res) => {
+  res.status(200).send({ products });
 });
 
-// Catch-all route for any other requests
-app.all('*', (req, res) => {
-  res.status(404).send({ error: 'Not Found' });
+// Add a new product
+app.post('/products', (req, res) => {
+  const { name, price } = req.body;
+  if (!name || !price) {
+    return res.status(400).send({ error: 'Name and price are required' });
+  }
+  const newProduct = { id: products.length + 1, name, price };
+  products.push(newProduct);
+  res.status(201).send({ message: 'Product added', product: newProduct });
 });
 
 app.listen(port, () => {
-  console.log(`Backend API listening at http://localhost:${port}`);
+  console.log(`E-commerce service listening at http://localhost:${port}`);
 });
