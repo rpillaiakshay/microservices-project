@@ -2,7 +2,7 @@
 # Highly Available and Scalable Microservices Architecture on AWS
 
 ## Objective
-Objective of this project is to build a highly available & scalable microservices architecture on AWS. The project involves designing a microservices setup for an application (e.g., ecommerce) & implementing the infrastructure and deployment pipeline. Key tasks include:
+Objective of this project is to build a highly available & scalable microservices architecture on AWS. The project involves designing a microservices setup for an application (e.g. ecommerce) & implementing the infrastructure and deployment pipeline. Key tasks include:
 - Using Terraform to provision AWS infrastructure such as VPCs, subnets, security groups & EKS clusters.
 - Deploying microservices on Kubernetes with features like service discovery, load balancing, and autoscaling.
 - Integrating CI/CD pipelines with Jenkins for continuous deployment.
@@ -144,11 +144,11 @@ git push -u origin main
 ## Create a Pipeline Job in Jenkins
 
 1. From the Jenkins dashboard, select **New Item**.
-2. Choose **Pipeline** as the job type, and name it (e.g., `Microservices Pipeline`).
+2. Choose **Pipeline** as the job type, and name it (e.g. `Microservices Pipeline`).
 3. In the pipeline configuration:
    - Under **Pipeline Definition**, select **Pipeline script from SCM**.
    - Choose Git as the SCM and provide the GitHub repository URL.
-   - Add the branch to build (e.g., `main`).
+   - Add the branch to build.
    - Configure credentials to access the GitHub repository using the previously added credentials.
      
 
