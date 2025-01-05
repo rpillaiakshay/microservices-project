@@ -84,8 +84,8 @@ aws configure
 Provide:
 1. Access Key
 2. Secret Key
-3. Region (e.g. ap-south-1)
-4. Output format (e.g. JSON)
+3. Region
+4. Output format
 
 ### Install GitHub
 ```bash
