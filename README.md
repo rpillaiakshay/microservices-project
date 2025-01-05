@@ -119,7 +119,7 @@ touch microservices-project/terraform/terraform.tf
 cd microservices-project
 git init
 git add .
-git commit -m "Microservices Project"
+git commit -m "Microservices-Project"
 git branch -M main
 git remote add origin <github repo url>
 git push -u origin main
