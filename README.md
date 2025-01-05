@@ -121,7 +121,7 @@ git init
 git add .
 git commit -m "Microservices Project"
 git branch -M main
-git remote add origin <github-repo-url>
+git remote add origin <[github-repo-url](https://github.com/rpillaiakshay/microservices-project.git)>
 git push -u origin main
 ```
 
