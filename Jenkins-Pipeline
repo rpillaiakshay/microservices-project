@@ -111,18 +111,53 @@ pipeline {
                 }
             }
         }
+stage('Apply Terraform Configuration') {
+    steps {
+        script {
+            // Change to the terraform directory
+            sh '''
+                cd microservices-project/terraform
 
-        stage('Terraform Apply') {
-            steps {
-                script {
-                    // Initialize and apply Terraform configurations
-                    sh '''
-                        cd microservices-project/terraform
+                # Check if the cluster exists
+                if aws eks describe-cluster --name micro-services --region ap-south-1 > /dev/null 2>&1; then
+                    echo "EKS cluster micro-services already exists. Using existing cluster."
+
+                    # Handle existing IAM roles
+                    terraform init
+                    terraform import aws_iam_role.eks_cluster micro-services-cluster-role || true
+                    terraform import aws_iam_role.eks_nodes micro-services-nodes-role || true
+
+                    # Backup terraform.tf before modifying
+                    cp terraform.tf terraform.tf.bak || true
+
+                    # Comment out the aws_vpc block manually or use a more precise method:
+                    awk '/resource "aws_vpc" "main"/ {in_block=1} in_block {print "# " $0; next} /}/ && in_block {in_block=0} 1' terraform.tf > temp.tf && mv temp.tf terraform.tf
+
+                    # Reinitialize after commenting out VPC
+                    if ! terraform init -reconfigure; then
+                        echo "Failed to initialize Terraform. Restoring original configuration."
+                        cp terraform.tf.bak terraform.tf
+                        exit 1
+                    fi
+
+                    # Plan the infrastructure changes, excluding the VPC
+                    terraform plan -out=tfplan
+
+                    # Apply the changes
+                    if terraform apply -auto-approve tfplan; then
+                        echo "Terraform apply was successful."
+                    else
+                        echo "Terraform apply failed. Attempting to clean up and re-try..."
+                        terraform state list | xargs -I {} terraform state rm {}
                         terraform init
-                        terraform apply -auto-approve
-                    '''
-                }
-            }
+                        terraform apply -auto-approve tfplan
+                    fi
+                else
+                    echo "EKS cluster micro-services does not exist. Skipping Terraform apply for now."
+                fi
+            '''
         }
+    }
+}
     }
 }
