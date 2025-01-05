@@ -1,163 +1,214 @@
-pipeline {
-    agent any
+Building a Highly Available and Scalable Microservices Architecture on AWS
 
-    environment {
-        DOCKER_IMAGE = 'rpillaiakshay/myapp'
-        GITHUB_REPO = 'https://github.com/rpillaiakshay/microservices-project.git'
-        AWS_REGION = 'ap-south-1'
-        CLUSTER_NAME = 'micro-services'
-        AWS_ACCESS_KEY_ID = credentials('AwsKey')  // Ensuring AWS credentials are globally available
-        AWS_SECRET_ACCESS_KEY = credentials('AwsKey')
-    }
+Objective
 
-    stages {
-        stage('Clean Workspace') {
-            steps {
-                script {
-                    // Clean up the workspace
-                    sh 'rm -rf microservices-project'
-                }
-            }
-        }
+The goal of this project is to build a highly available and scalable microservices architecture on AWS. The project involves designing a setup for an application (e.g., an e-commerce platform) and implementing infrastructure and deployment pipelines. Key tasks include:
 
-        stage('Clone Code from GitHub') {
-            steps {
-                script {
-                    withCredentials([string(credentialsId: 'GitHub', variable: 'GITHUB_TOKEN')]) {
-                        // Clone the repository using the GitHub token
-                        sh 'git clone https://$GITHUB_TOKEN@github.com/rpillaiakshay/microservices-project.git'
-                    }
-                }
-            }
-        }
+Using Terraform to provision AWS infrastructure, including VPCs, subnets, security groups, and EKS clusters.
 
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    // Build the Docker image
-                    sh 'docker build -t $DOCKER_IMAGE ./microservices-project/app'
-                }
-            }
-        }
+Deploying microservices on Kubernetes with service discovery, load balancing, and autoscaling.
 
-        stage('Push Docker Image to Docker Hub') {
-            steps {
-                script {
-                    withCredentials([string(credentialsId: 'DockerHub', variable: 'DOCKERHUB_TOKEN')]) {
-                        // Login and push the Docker image to Docker Hub
-                        sh '''
-                            echo $DOCKERHUB_TOKEN | docker login -u rpillaiakshay --password-stdin
-                            docker push $DOCKER_IMAGE
-                        '''
-                    }
-                }
-            }
-        }
+Integrating CI/CD pipelines with Jenkins for continuous deployment.
 
-        stage('Deploy Backend to Kubernetes (Blue Environment)') {
-            steps {
-                script {
-                    // Authenticate with AWS credentials and configure kubectl
-                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AwsKey']]) {
-                        sh '''
-                            aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
-                            kubectl apply -f microservices-project/k8s/backend-deployment-blue.yaml
-                            kubectl apply -f microservices-project/k8s/backend-service.yaml
-                        '''
-                    }
-                }
-            }
-        }
+Setting up monitoring systems using Prometheus and Grafana.
 
-        stage('Deploy Backend to Kubernetes (Green Environment)') {
-            steps {
-                script {
-                    // Deploy to the Green environment
-                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AwsKey']]) {
-                        sh '''
-                            aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
-                            kubectl apply -f microservices-project/k8s/backend-deployment-green.yaml
-                            kubectl apply -f microservices-project/k8s/backend-service.yaml
-                        '''
-                    }
-                }
-            }
-        }
+Implementing security best practices and blue/green deployments for seamless updates.
 
-        stage('Switch Traffic to Green (Blue/Green Switch)') {
-            steps {
-                script {
-                    // Ensure credentials are available for kubectl
-                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AwsKey']]) {
-                        sh '''
-                            aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
-                            kubectl apply -f microservices-project/k8s/ingress.yaml
-                        '''
-                    }
-                }
-            }
-        }
+Managing version control and CI/CD integration with GitHub.
 
-        stage('Delete Blue Environment') {
-            steps {
-                script {
-                    // Delete the Blue environment if it exists
-                    def deploymentExists = sh(script: 'kubectl get deployments backend-deployment-blue -o name', returnStatus: true)
-                    if (deploymentExists == 0) {
-                        sh 'kubectl delete -f microservices-project/k8s/backend-deployment-blue.yaml'
-                    } else {
-                        echo 'Blue environment deployment does not exist. Skipping deletion.'
-                    }
-                }
-            }
-        }
-stage('Apply Terraform Configuration') {
-    steps {
-        script {
-            // Change to the terraform directory
-            sh '''
-                cd microservices-project/terraform
+Prerequisites
 
-                # Check if the cluster exists
-                if aws eks describe-cluster --name micro-services --region ap-south-1 > /dev/null 2>&1; then
-                    echo "EKS cluster micro-services already exists. Using existing cluster."
+Operating System: Ubuntu or another compatible Linux distribution.
 
-                    # Handle existing IAM roles
-                    terraform init
-                    terraform import aws_iam_role.eks_cluster micro-services-cluster-role || true
-                    terraform import aws_iam_role.eks_nodes micro-services-nodes-role || true
+AWS Account: Ensure IAM roles and permissions are appropriately configured.
 
-                    # Backup terraform.tf before modifying
-                    cp terraform.tf terraform.tf.bak || true
+Installed Tools: Docker, Jenkins, Kubernetes tools (kubectl, eksctl), Terraform, Prometheus, Grafana, and GitHub.
 
-                    # Comment out the aws_vpc block manually or use a more precise method:
-                    awk '/resource "aws_vpc" "main"/ {in_block=1} in_block {print "# " $0; next} /}/ && in_block {in_block=0} 1' terraform.tf > temp.tf && mv temp.tf terraform.tf
+AWS CLI Configuration: Include access key, secret key, region (e.g., ap-south-1), and output format as JSON.
 
-                    # Reinitialize after commenting out VPC
-                    if ! terraform init -reconfigure; then
-                        echo "Failed to initialize Terraform. Restoring original configuration."
-                        cp terraform.tf.bak terraform.tf
-                        exit 1
-                    fi
+Environment Setup
 
-                    # Plan the infrastructure changes, excluding the VPC
-                    terraform plan -out=tfplan
+Install Docker
 
-                    # Apply the changes
-                    if terraform apply -auto-approve tfplan; then
-                        echo "Terraform apply was successful."
-                    else
-                        echo "Terraform apply failed. Attempting to clean up and re-try..."
-                        terraform state list | xargs -I {} terraform state rm {}
-                        terraform init
-                        terraform apply -auto-approve tfplan
-                    fi
-                else
-                    echo "EKS cluster micro-services does not exist. Skipping Terraform apply for now."
-                fi
-            '''
-        }
-    }
-}
-    }
-}
+Update system packages:
+
+sudo apt update
+sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+
+Add Docker's official GPG key and repository:
+
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+Install Docker:
+
+sudo apt update
+sudo apt install -y docker-ce
+docker --version
+
+Add the current user to the Docker group:
+
+sudo usermod -aG docker $USER
+newgrp docker
+docker run hello-world
+
+Install Jenkins
+
+Install JDK 17:
+
+sudo apt update
+sudo apt install -y openjdk-17-jdk
+java -version
+
+Download and run Jenkins:
+
+wget https://updates.jenkins.io/download/war/2.387.3/jenkins.war
+java -jar jenkins.war --httpPort=8080
+
+Install Kubernetes Tools
+
+Install kubectl
+
+Download the binary:
+
+curl -LO https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl
+
+Install kubectl:
+
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+kubectl version --client
+
+Install eksctl
+
+Download and install:
+
+curl -LO https://github.com/eksctlio/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz
+tar -xzf eksctl_Linux_amd64.tar.gz -C /usr/local/bin
+eksctl version
+
+Install AWS CLI
+
+Download and install:
+
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+
+Configure AWS CLI:
+
+aws configure
+
+Provide the following:
+
+Access Key
+
+Secret Key
+
+Region (e.g., ap-south-1)
+
+Output format (e.g., JSON)
+
+Install GitHub CLI
+
+Install Git:
+
+sudo apt update
+sudo apt install -y git
+git --version
+
+Infrastructure Setup
+
+Create an EKS Cluster
+
+Use eksctl to create the cluster:
+
+eksctl create cluster --name micro-services --region ap-south-1 --nodegroup-name eks-nodes --nodes 3 --nodes-min 1 --nodes-max 4 --managed
+
+Verify the cluster and nodes:
+
+eksctl get cluster --region ap-south-1
+kubectl get nodes
+
+Repository Structure
+
+GitHub Repository
+
+Repository Name: microservices-project
+
+Directory Structure
+
+microservices-project
+|-- app
+|   |-- .env
+|   |-- Dockerfile
+|   |-- package.json
+|   |-- server.js
+|-- k8s
+|   |-- backend-deployment-blue.yaml
+|   |-- backend-deployment-green.yaml
+|   |-- backend-service.yaml
+|   |-- hpa.yaml
+|   |-- ingress.yaml
+|-- terraform
+|   |-- terraform.tf
+
+Commands to Set Up Repository
+
+Create directory structure:
+
+mkdir -p microservices-project/{app,k8s,terraform}
+touch microservices-project/app/{.env,Dockerfile,package.json,server.js}
+touch microservices-project/k8s/{backend-deployment-blue.yaml,backend-deployment-green.yaml,backend-service.yaml,hpa.yaml,ingress.yaml}
+touch microservices-project/terraform/terraform.tf
+
+Initialize Git and push to GitHub:
+
+cd microservices-project
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin <github-repo-url>
+git push -u origin main
+
+Setting Up Jenkins
+
+Navigate to Manage Jenkins > Credentials and add the following:
+
+DockerHub: Secret Text with ID DockerHub
+
+GitHub: Secret Text with ID GitHub
+
+AWS: Access Key and Secret Key
+
+Install plugins:
+
+Pipeline
+
+Terraform
+
+Kubernetes CLI
+
+AWS Credentials
+
+Docker Commons
+
+Git
+
+Create a pipeline job:
+
+Use "Pipeline script from SCM".
+
+Provide GitHub repository URL and credentials.
+
+Output
+
+GitHub Repository: microservices-project
+
+Docker Hub Image: docker pull rpillaiakshay/myapp:latest
+
+Conclusion
+
+The project demonstrates a robust Jenkins pipeline automating CI/CD for a microservice-based e-commerce application. Docker is used for containerization, with images pushed to Docker Hub. The setup supports blue/green deployments, scaling, and monitoring using Prometheus and Grafana for a highly available and scalable infrastructure.
+
