@@ -160,3 +160,154 @@ Use Prometheus and Grafana to monitor system performance. Access the monitoring 
 
 ## Conclusion
 The project leverages a robust Jenkins pipeline that automates the continuous integration and deployment of the microservice-based e-commerce application. By using Docker to containerize the microservices, the pipeline ensures that the application is efficiently built, tested & pushed to Docker Hub. The Docker Hub image for the e-commerce application provides a lightweight, containerized microservice with endpoints for health checks and product management. It is designed to be scalable and easily integrated into a larger application setup.
+
+
+{{
+
+
+# GitHub Repository Structure
+The GitHub repository contains the following directories:
+
+1. `app`: Node.js application source code
+2. `k8s`: Kubernetes manifests for deploying the application
+3. `terraform`: Terraform configuration files for provisioning AWS infrastructure
+
+App Directory
+The `app` directory contains the following files:
+
+*`.env` File*
+The `.env` file contains environment variables for the application:
+
+- `NODE_ENV=production`: Sets the Node.js environment to production.
+- `PORT=8080`: Specifies the port number for the application.
+
+*`Dockerfile` File*
+The `Dockerfile` contains instructions for building a Docker image:
+
+1. `FROM node:14-alpine`: Uses the official Node.js 14 Alpine image as the base image.
+2. `WORKDIR /app`: Sets the working directory to `/app`.
+3. `COPY package*.json ./`: Copies the `package.json` and `package-lock.json` files to the working directory.
+4. `RUN npm install`: Installs dependencies listed in `package.json`.
+5. `COPY . .`: Copies the rest of the application code to the working directory.
+6. `EXPOSE 8080`: Exposes port 8080 for the application.
+7. `CMD ["npm", "start"]`: Sets the default command to run `npm start`.
+
+*`package.json` File*
+The `package.json` file contains metadata and dependencies for the application:
+
+- `name`: Specifies the application name.
+- `version`: Specifies the application version.
+- `description`: Provides a brief description of the application.
+- `main`: Specifies the entry point of the application (`server.js`).
+- `scripts`: Defines scripts for the application, including `start` and `dev`.
+- `dependencies`: Lists dependencies required by the application, including Express.js.
+- `devDependencies`: Lists development dependencies, including nodemon.
+
+*`server.js` File*
+The `server.js` file contains the main application code:
+
+1. `const express = require('express')`: Imports the Express.js module.
+2. `const app = express()`: Creates an Express.js application instance.
+3. `const port = process.env.PORT || 8080`: Sets the port number from the environment variable or defaults to 8080.
+4. `app.use(express.json())`: Enables JSON parsing for incoming requests.
+5. Defines routes for the application, including a health check and product retrieval.
+
+K8s Directory
+The `k8s` directory contains the following files:
+
+*`backend-deployment-blue.yaml` and `backend-deployment-green.yaml` Files*
+These files define Kubernetes deployments for the "blue" and "green" environments:
+
+1. `apiVersion: apps/v1`: Specifies the API version for the deployment.
+2. `kind: Deployment`: Defines a deployment resource.
+3. `metadata.name`: Specifies the deployment name.
+4. `spec.replicas`: Sets the number of replicas (i.e., pods) to run.
+5. `spec.selector.matchLabels`: Selects pods with specific labels.
+6. `spec.template.metadata.labels`: Sets labels for the pods.
+7. `spec.template.spec.containers`: Defines the container configuration, including the Docker image and port.
+
+*`backend-service.yaml` File*
+This file defines a Kubernetes service for the application:
+
+1. `apiVersion: v1`: Specifies the API version for the service.
+2. `kind: Service`: Defines a service resource.
+3. `metadata.name`: Specifies the service name.
+4. `spec.selector`: Selects pods with specific labels.
+5. `spec.ports`: Defines the port configuration, including the port number and target port.
+
+*`ingress.yaml` File*
+This file defines a Kubernetes ingress resource for routing traffic:
+
+1. `apiVersion: networking.k8s.io/v1`: Specifies the API version for the ingress.
+2. `kind: Ingress`: Defines an ingress resource.
+3. `metadata.name`: Specifies the ingress name.
+4. `spec.rules`: Defines the ingress rules, including the host and path.
+
+*`hpa.yaml` File*
+This file defines a Kubernetes horizontal pod autoscaling (HPA) resource:
+
+1. `apiVersion: autoscaling/v2`: Specifies the API version for the HPA.
+2. `kind: HorizontalPodAutoscaler`: Defines an HPA resource.
+3. `metadata.name`: Specifies the HPA name.
+4. `spec.scaleTargetRef`: References the deployment to scale.
+5. `spec.metrics`: Defines the metrics for scaling, including CPU utilization.
+
+
+Terraform Directory
+The `terraform` directory contains the following files:
+
+_`terraform.tf` File_
+The `terraform.tf` file defines the Terraform configuration:
+
+1. `terraform { ... }`: Specifies the Terraform configuration.
+2. `provider "aws" { ... }`: Defines the AWS provider configuration.
+3. `variable "cluster_name" { ... }`: Defines a variable for the cluster name.
+4. `variable "vpc_cidr" { ... }`: Defines a variable for the VPC CIDR.
+5. `resource "aws_vpc" "main" { ... }`: Defines a VPC resource.
+6. `resource "aws_subnet" "public" { ... }`: Defines public subnet resources.
+7. `resource "aws_eks_cluster" "eks" { ... }`: Defines an EKS cluster resource.
+8. `resource "aws_eks_node_group" "nodes" { ... }`: Defines an EKS node group resource.
+
+_`variables.tf` File_
+The `variables.tf` file defines input variables for the Terraform configuration:
+
+1. `variable "cluster_name" { ... }`: Defines a variable for the cluster name.
+2. `variable "vpc_cidr" { ... }`: Defines a variable for the VPC CIDR.
+3. `variable "private_subnets" { ... }`: Defines a variable for the private subnets.
+4. `variable "public_subnets" { ... }`: Defines a variable for the public subnets.
+
+_`outputs.tf` File_
+The `outputs.tf` file defines output values for the Terraform configuration:
+
+1. `output "cluster_name" { ... }`: Defines an output value for the cluster name.
+2. `output "cluster_endpoint" { ... }`: Defines an output value for the cluster endpoint.
+3. `output "lb_dns_name" { ... }`: Defines an output value for the load balancer DNS name.
+
+# Jenkins Pipeline
+The Jenkins pipeline automates the following tasks:
+
+1. Clones the GitHub repository.
+2. Builds the Docker image.
+3. Pushes the Docker image to Docker Hub.
+4. Deploys the application to the "blue" environment.
+5. Deploys the application to the "green" environment.
+6. Switches traffic to the "green" environment.
+7. Deletes the "blue" environment.
+8. Applies the Terraform configuration.
+
+
+# Blue/Green Deployments
+The project uses blue/green deployments to ensure zero downtime during deployments. The "blue" environment represents the current production environment, while the "green" environment represents the new version of the application.
+
+# Autoscaling
+The project uses horizontal pod autoscaling (HPA) to scale the application based on CPU utilization. This ensures that the application can handle changes in traffic and maintains optimal performance.
+
+# Security
+The project follows security best practices, including:
+
+1. Using IAM roles and policies to manage access.
+2. Encrypting sensitive data.
+3. Implementing network security groups to control traffic.
+4. Using secrets management to store sensitive information.
+
+}}
